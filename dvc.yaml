@@ -1,0 +1,21 @@
+stages:
+  prepare_code_review_data:
+    cmd: python src/utils/data_preparation.py data/raw/code_review_dataset.json data/processed/code_review
+    deps:
+    - src/utils/data_preparation.py
+    - data/raw/code_review_dataset.json
+    outs:
+    - data/processed/code_review/train.json
+    - data/processed/code_review/val.json
+    - data/processed/code_review/test.json
+  
+  prepare_codesearchnet_data:
+    cmd: python src/utils/data_preparation.py data/raw/codesearchnet_dataset_clean.json data/processed/codesearchnet
+    deps:
+    - src/utils/data_preparation.py
+    - data/raw/codesearchnet_dataset_clean.json
+    outs:
+    - data/processed/codesearchnet/train.json
+    - data/processed/codesearchnet/val.json
+    - data/processed/codesearchnet/test.json
+

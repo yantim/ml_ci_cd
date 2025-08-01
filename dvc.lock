@@ -1,0 +1,51 @@
+schema: '2.0'
+stages:
+  prepare_code_review_data:
+    cmd: python src/utils/data_preparation.py data/raw/code_review_dataset.json data/processed/code_review
+    deps:
+    - path: data/raw/code_review_dataset.json
+      hash: md5
+      md5: 9bd80759b44ce92a07a64f96d98eacb5
+      size: 3746
+    - path: src/utils/data_preparation.py
+      hash: md5
+      md5: 3cf937cc9a738a1c71d87f130cfaa00a
+      size: 2760
+    outs:
+    - path: data/processed/code_review/test.json
+      hash: md5
+      md5: a75a0a373ded5a7dee1fe8690ab0143f
+      size: 1723
+    - path: data/processed/code_review/train.json
+      hash: md5
+      md5: 1bdcdbe520b932437ba5137030d84f5f
+      size: 3606
+    - path: data/processed/code_review/val.json
+      hash: md5
+      md5: d751713988987e9331980363e24189ce
+      size: 2
+  prepare_codesearchnet_data:
+    cmd: python src/utils/data_preparation.py data/raw/codesearchnet_dataset_clean.json
+      data/processed/codesearchnet
+    deps:
+    - path: data/raw/codesearchnet_dataset_clean.json
+      hash: md5
+      md5: eb22bd553f3683f3fcaf53f8759212f0
+      size: 1371
+    - path: src/utils/data_preparation.py
+      hash: md5
+      md5: 3cf937cc9a738a1c71d87f130cfaa00a
+      size: 2760
+    outs:
+    - path: data/processed/codesearchnet/test.json
+      hash: md5
+      md5: 791eeb80a676edac395b949948e2e3e4
+      size: 1086
+    - path: data/processed/codesearchnet/train.json
+      hash: md5
+      md5: 15a1cacf807feef365b5ddd61ddcaf21
+      size: 3034
+    - path: data/processed/codesearchnet/val.json
+      hash: md5
+      md5: d751713988987e9331980363e24189ce
+      size: 2

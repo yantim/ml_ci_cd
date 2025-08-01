@@ -44,11 +44,12 @@ mlruns/
 mlartifacts/
 
 # DVC
-/dvc.lock
-*.dvc
 
-# Data files
-data/*
+# Data files - ignore the actual data but allow DVC files
+data/raw/*
+data/processed/*
+!data/raw/*.dvc
+!data/processed/*.dvc
 !data/.gitkeep
 
 # Model files
