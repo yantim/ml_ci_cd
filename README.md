@@ -1,9 +1,5 @@
 # ML CI/CD Pipeline Project
 
-[![CI](https://github.com/yantim/ml_ci_cd/workflows/CI/badge.svg)](https://github.com/yantim/ml_ci_cd/actions)
-[![Deploy](https://github.com/yantim/ml_ci_cd/workflows/Deploy/badge.svg)](https://github.com/yantim/ml_ci_cd/actions)
-[![codecov](https://codecov.io/gh/yantim/ml_ci_cd/branch/main/graph/badge.svg)](https://codecov.io/gh/yantim/ml_ci_cd)
-
 A comprehensive end-to-end MLOps pipeline demonstrating modern machine learning practices with PyTorch, MLflow, Docker, and AWS deployment. This project showcases a complete ML CI/CD workflow from data preparation to production deployment.
 
 ## 🏗️ Architecture Overview
