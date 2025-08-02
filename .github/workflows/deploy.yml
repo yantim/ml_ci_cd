@@ -63,7 +63,7 @@ jobs:
       run: |
         echo "Getting model from MLflow Model Registry..."
         
-        python -c "
+        python -c "\
 import mlflow
 from mlflow.tracking import MlflowClient
 import os
