@@ -1,9 +1,5 @@
 # ML CI/CD Pipeline Project
 
-[![CI](https://github.com/yantim/ml_ci_cd/workflows/CI/badge.svg)](https://github.com/yantim/ml_ci_cd/actions)
-[![Deploy](https://github.com/yantim/ml_ci_cd/workflows/Deploy/badge.svg)](https://github.com/yantim/ml_ci_cd/actions)
-[![codecov](https://codecov.io/gh/yantim/ml_ci_cd/branch/main/graph/badge.svg)](https://codecov.io/gh/yantim/ml_ci_cd)
-
 A comprehensive end-to-end MLOps pipeline demonstrating modern machine learning practices with PyTorch, MLflow, Docker, and AWS deployment. This project showcases a complete ML CI/CD workflow from data preparation to production deployment.
 
 ## 🏗️ Architecture Overview
@@ -619,23 +615,3 @@ Access MLflow UI at `http://localhost:5000` to view:
 - [`TRAINING_PIPELINE.md`](TRAINING_PIPELINE.md) - Training pipeline details
 - [`TESTING.md`](TESTING.md) - Testing strategies and setup
 - [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) - Production deployment guide
-
-### Additional Resources
-- [`DATA_SETUP_SUMMARY.md`](DATA_SETUP_SUMMARY.md) - Data preparation guide
-- [`DOCKER_ORCHESTRATION.md`](DOCKER_ORCHESTRATION.md) - Docker setup and usage
-- Architecture Decision Records (ADRs) in [`docs/adr/`](docs/adr/)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 Support
-
-For questions and support:
-- Create an issue in the repository
-- Check existing documentation in `docs/`
-- Review troubleshooting section above
-
----
-
-**Built with ❤️ by the MLOps Team**
