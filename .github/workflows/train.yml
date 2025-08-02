@@ -1,0 +1,248 @@
+name: Training Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      data_version:
+        description: 'DVC data version/tag to use for training'
+        required: false
+        default: 'latest'
+      model_name:
+        description: 'MLflow model name'
+        required: false
+        default: 'code_model_fine_tuning_model'
+      experiment_name:
+        description: 'MLflow experiment name'
+        required: false
+        default: 'code_model_training'
+
+env:
+  PYTHON_VERSION: "3.10"
+  AWS_REGION: "us-west-2"
+
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  training:
+    runs-on: ubuntu-latest
+    name: Model Training Pipeline
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for DVC to work properly
+    
+    - name: Configure AWS credentials using OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-session-name: GitHubActions-Training
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Cache DVC data
+      uses: actions/cache@v3
+      with:
+        path: |
+          .dvc/cache
+          data/
+        key: dvc-${{ runner.os }}-${{ hashFiles('dvc.lock', '.dvc/config') }}
+        restore-keys: |
+          dvc-${{ runner.os }}-
+    
+    - name: Setup DVC
+      run: |
+        # Configure DVC with AWS S3 remote
+        dvc remote modify origin region ${{ env.AWS_REGION }}
+        dvc remote modify origin use_ssl true
+        # DVC will use AWS credentials from the OIDC configuration
+    
+    - name: Pull data with DVC
+      run: |
+        echo "Pulling data from DVC remote..."
+        dvc pull
+        echo "DVC data pull completed successfully"
+    
+    - name: Verify data integrity
+      run: |
+        echo "Verifying data integrity..."
+        # Check if required data files exist
+        if [ ! -f "data/processed/code_review/train.json" ]; then
+          echo "Error: Training data not found"
+          exit 1
+        fi
+        if [ ! -f "data/processed/code_review/val.json" ]; then
+          echo "Error: Validation data not found"
+          exit 1
+        fi
+        echo "Data integrity check passed"
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build training Docker image
+      run: |
+        echo "Building training Docker image..."
+        docker build -f docker/train.Dockerfile -t ml-training:${{ github.sha }} .
+        echo "Training image built successfully"
+    
+    - name: Run training in Docker container
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_EXPERIMENT_NAME: ${{ github.event.inputs.experiment_name || 'code_model_training' }}
+        MODEL_NAME: ${{ github.event.inputs.model_name || 'code_model_fine_tuning_model' }}
+        AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+      run: |
+        echo "Starting training pipeline..."
+        
+        # Create MLflow tracking directory
+        mkdir -p mlflow_artifacts
+        
+        # Run training container
+        docker run --rm \
+          -v $(pwd)/data:/home/app/data:ro \
+          -v $(pwd)/mlflow_artifacts:/home/app/mlflow_artifacts \
+          -e MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI}" \
+          -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME}" \
+          -e MODEL_NAME="${MODEL_NAME}" \
+          -e AWS_ACCESS_KEY_ID \
+          -e AWS_SECRET_ACCESS_KEY \
+          -e AWS_SESSION_TOKEN \
+          -e AWS_DEFAULT_REGION \
+          ml-training:${{ github.sha }}
+        
+        echo "Training completed successfully"
+    
+    - name: Verify MLflow artifacts
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      run: |
+        echo "Verifying MLflow artifacts..."
+        
+        # List recent experiments and runs
+        python -c "
+import mlflow
+mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
+experiment = mlflow.get_experiment_by_name('${{ github.event.inputs.experiment_name || 'code_model_training' }}')
+if experiment:
+    runs = mlflow.search_runs(experiment.experiment_id, max_results=1, order_by=['start_time DESC'])
+    if not runs.empty:
+        print(f'Latest run ID: {runs.iloc[0].run_id}')
+        print(f'Latest run status: {runs.iloc[0].status}')
+        print(f'Latest run metrics: {runs.iloc[0].to_dict()}')
+        print('Training artifacts verified successfully')
+    else:
+        print('No runs found in experiment')
+        exit(1)
+else:
+    print('Experiment not found')
+    exit(1)
+"
+    
+    - name: Register model in MLflow Model Registry
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MODEL_NAME: ${{ github.event.inputs.model_name || 'code_model_fine_tuning_model' }}
+      run: |
+        echo "Registering model in MLflow Model Registry..."
+        
+        python -c "
+import mlflow
+from mlflow.tracking import MlflowClient
+
+mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
+client = MlflowClient()
+
+# Get the latest run from the experiment
+experiment = mlflow.get_experiment_by_name('${{ github.event.inputs.experiment_name || 'code_model_training' }}')
+if experiment:
+    runs = mlflow.search_runs(experiment.experiment_id, max_results=1, order_by=['start_time DESC'])
+    if not runs.empty:
+        run_id = runs.iloc[0].run_id
+        model_uri = f'runs:/{run_id}/model'
+        
+        # Register the model
+        try:
+            model_version = mlflow.register_model(
+                model_uri=model_uri,
+                name='${{ env.MODEL_NAME }}',
+                tags={
+                    'commit_sha': '${{ github.sha }}',
+                    'branch': '${{ github.ref_name }}',
+                    'workflow_run_id': '${{ github.run_id }}',
+                    'training_date': '${{ github.event.head_commit.timestamp }}'
+                }
+            )
+            print(f'Model registered successfully: {model_version.name} version {model_version.version}')
+            
+            # Tag this version as 'staging' by default
+            client.transition_model_version_stage(
+                name='${{ env.MODEL_NAME }}',
+                version=model_version.version,
+                stage='Staging'
+            )
+            print(f'Model version {model_version.version} transitioned to Staging')
+            
+        except Exception as e:
+            print(f'Error registering model: {e}')
+            exit(1)
+    else:
+        print('No runs found to register')
+        exit(1)
+else:
+    print('Experiment not found')
+    exit(1)
+"
+    
+    - name: Upload training artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: training-artifacts-${{ github.sha }}
+        path: |
+          mlflow_artifacts/
+          training_logs.txt
+        retention-days: 30
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        echo "Cleaning up temporary files..."
+        docker system prune -f
+        rm -rf mlflow_artifacts/
+        echo "Cleanup completed"
+
+  # Notification job for training completion
+  notify:
+    runs-on: ubuntu-latest
+    needs: training
+    if: always()
+    steps:
+    - name: Notify training completion
+      run: |
+        if [ "${{ needs.training.result }}" == "success" ]; then
+          echo "✅ Training pipeline completed successfully"
+          echo "Model has been registered in MLflow Model Registry"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+        else
+          echo "❌ Training pipeline failed"
+          echo "Check the training logs for details"
+          exit 1
+        fi

@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # MLflow Tracking Server
+  mlflow-server:
+    image: python:3.10-slim
+    container_name: mlflow-server
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/app/artifacts
+    volumes:
+      - mlflow_data:/app
+      - ./mlflow:/app/mlflow
+    command: >
+      bash -c "
+        pip install mlflow[extras]==2.11.0 &&
+        mlflow server
+        --backend-store-uri sqlite:///mlflow.db
+        --default-artifact-root /app/artifacts
+        --host 0.0.0.0
+        --port 5000
+      "
+    networks:
+      - ml-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Training Service
+  train:
+    image: ${TRAIN_IMAGE:-localhost/ml-pipeline/train:latest}
+    container_name: ml-train
+    depends_on:
+      - mlflow-server
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - EXPERIMENT_NAME=${EXPERIMENT_NAME:-code_model_training}
+      - MODEL_NAME=${MODEL_NAME:-code_model_fine_tuning_model}
+      - PYTHONPATH=/home/app
+    volumes:
+      - ./data:/home/app/data:ro
+      - ./config:/home/app/config:ro
+      - model_artifacts:/home/app/models
+    networks:
+      - ml-network
+    profiles:
+      - train
+
+  # Serving Service
+  serve:
+    image: ${SERVE_IMAGE:-localhost/ml-pipeline/serve:latest}
+    container_name: ml-serve
+    depends_on:
+      - mlflow-server
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_URI=${MODEL_URI:-models:/code_model_fine_tuning_model/latest}
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - MODEL_PATH=/app/models
+      - ARTIFACTS_PATH=/app/artifacts
+    volumes:
+      - model_artifacts:/app/models
+      - mlflow_artifacts:/app/artifacts
+    networks:
+      - ml-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - serve
+
+  # Development Serving (without MLflow dependency for local testing)
+  serve-dev:
+    image: ${SERVE_IMAGE:-localhost/ml-pipeline/serve:latest}
+    container_name: ml-serve-dev
+    ports:
+      - "8001:8000"
+    environment:
+      - MODEL_URI=
+      - MLFLOW_TRACKING_URI=
+    networks:
+      - ml-network
+    profiles:
+      - dev
+
+volumes:
+  mlflow_data:
+    driver: local
+  mlflow_artifacts:
+    driver: local
+  model_artifacts:
+    driver: local
+
+networks:
+  ml-network:
+    driver: bridge

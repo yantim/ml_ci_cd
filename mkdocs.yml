@@ -1,0 +1,133 @@
+site_name: ML CI/CD Pipeline Documentation
+site_description: Complete documentation for the ML CI/CD pipeline project
+site_author: MLOps Team
+site_url: https://your-username.github.io/ml_ci_cd
+
+# Repository
+repo_name: your-username/ml_ci_cd
+repo_url: https://github.com/your-username/ml_ci_cd
+
+# Configuration
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.annotate
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+
+# Plugins
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+  - minify:
+      minify_html: true
+
+# Navigation
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: getting-started/quickstart.md
+    - Installation: getting-started/installation.md
+    - Local Development: getting-started/local-development.md
+    - Environment Setup: getting-started/environment-setup.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - System Design: architecture/system-design.md
+    - Data Flow: architecture/data-flow.md
+    - Security: architecture/security.md
+  - Development Guide:
+    - Setup: development/setup.md
+    - Workflow: development/workflow.md
+    - Code Standards: development/code-standards.md
+    - Testing Strategy: development/testing.md
+  - MLflow Integration:
+    - Setup Guide: mlflow/setup.md
+    - Experiment Tracking: mlflow/experiments.md
+    - Model Registry: mlflow/registry.md
+    - Production Usage: mlflow/production.md
+  - CI/CD Pipeline:
+    - Overview: cicd/overview.md
+    - GitHub Actions: cicd/github-actions.md
+    - Quality Gates: cicd/quality-gates.md
+    - Deployment Pipeline: cicd/deployment.md
+  - AWS Deployment:
+    - Infrastructure: aws/infrastructure.md
+    - ECS Deployment: aws/ecs.md
+    - RDS Setup: aws/rds.md
+    - S3 Configuration: aws/s3.md
+    - Monitoring: aws/monitoring.md
+  - Troubleshooting:
+    - Common Issues: troubleshooting/common-issues.md
+    - Performance: troubleshooting/performance.md
+    - Debugging: troubleshooting/debugging.md
+    - FAQ: troubleshooting/faq.md
+  - API Reference:
+    - Model Serving: api/serving.md
+    - MLflow API: api/mlflow.md
+    - Configuration: api/configuration.md
+  - ADR:
+    - Decision Records: adr/index.md
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/your-username/ml_ci_cd
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/u/your-username
+  version:
+    provider: mike
+
+# Copyright
+copyright: Copyright &copy; 2024 MLOps Team

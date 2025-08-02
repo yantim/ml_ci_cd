@@ -1,0 +1,84 @@
+# Training Configuration for Code Model Fine-tuning
+
+# Model configuration
+model:
+  name: "Salesforce/codet5-base"  # Can also use "microsoft/codebert-base"
+  cache_dir: "./models/cache"
+  trust_remote_code: true
+
+# Data configuration
+data:
+  train_path: "data/processed/codesearchnet/train.json"
+  val_path: "data/processed/codesearchnet/val.json"
+  test_path: "data/processed/codesearchnet/test.json"
+  max_length: 512
+  padding: true
+  truncation: true
+
+# LoRA/PEFT configuration
+peft:
+  use_peft: true
+  r: 16  # Low-rank adaptation dimension
+  lora_alpha: 32
+  lora_dropout: 0.1
+  target_modules: ["q", "v", "k", "o", "wi", "wo"]  # For T5-based models
+  bias: "none"
+  task_type: "SEQ_2_SEQ_LM"
+
+# Training arguments
+training:
+  output_dir: "./models/fine_tuned"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 4
+  learning_rate: 5e-4
+  weight_decay: 0.01
+  warmup_steps: 500
+  logging_steps: 50
+  eval_steps: 500
+  save_steps: 1000
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  remove_unused_columns: false
+  dataloader_num_workers: 4
+  fp16: true  # Enable mixed precision training
+  gradient_checkpointing: true  # Save memory
+  save_total_limit: 2
+
+# Generation configuration for examples
+generation:
+  max_new_tokens: 256
+  num_beams: 4
+  do_sample: false
+  early_stopping: true
+  pad_token_id: 0
+
+# MLflow configuration
+mlflow:
+  experiment_name: "code_model_fine_tuning"
+  run_name: null  # Will be auto-generated if null
+  tracking_uri: "${MLFLOW_TRACKING_URI:file:./mlruns}"  # Use env var or default
+  log_model: true
+
+# Model registry configuration
+registry:
+  huggingface:
+    repo_id: null  # Set this to push to HF Hub
+    private: false
+    token: null  # Use HF_TOKEN environment variable
+  s3:
+    bucket: null  # Set this to push to S3
+    key_prefix: "models/code_models"
+    region: "us-east-1"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Random seed for reproducibility
+seed: 42

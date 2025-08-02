@@ -1,0 +1,37 @@
+# AWS Configuration
+aws_region = "us-west-2"
+project_name = "ml-ci-cd"
+environment = "dev"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+availability_zones = ["us-west-2a", "us-west-2b", "us-west-2c"]
+
+# RDS Configuration
+db_username = "mlflow"
+db_instance_class = "db.t3.micro"
+db_allocated_storage = 20
+db_max_allocated_storage = 100
+
+# ECS Configuration
+ecs_cluster_name = "ml-pipeline"
+fargate_cpu = 1024
+fargate_memory = 2048
+
+# Auto Scaling
+min_capacity = 1
+max_capacity = 10
+target_cpu_utilization = 70
+
+# Domain Configuration (optional - set if you have a domain)
+domain_name = ""  # e.g., "example.com"
+subdomain_mlflow = "mlflow"
+subdomain_api = "api"
+
+# Tags
+tags = {
+  Project     = "ML-CI-CD"
+  Environment = "dev"
+  Owner       = "ml-team"
+  ManagedBy   = "terraform"
+}

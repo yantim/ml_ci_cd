@@ -1,0 +1,277 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: 'MLflow model version to deploy (leave empty for latest Production)'
+        required: false
+        default: ''
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+  # Trigger when a model is promoted to Production in MLflow
+  repository_dispatch:
+    types: [mlflow-model-promotion]
+
+permissions:
+  id-token: write   # Required to authenticate on AWS
+  contents: read    # Required for actions/checkout
+
+env:
+  PYTHON_VERSION: "3.10"
+  AWS_REGION: "us-west-2"
+  MODEL_NAME: "code_model_fine_tuning_model"
+
+jobs:
+  validate-model:
+    runs-on: ubuntu-latest
+    name: Validate MLflow Model
+    outputs:
+      model_version: ${{ steps.get-model.outputs.model_version }}
+      model_uri: ${{ steps.get-model.outputs.model_uri }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Get model from MLflow Model Registry
+      id: get-model
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        TARGET_ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+        MODEL_VERSION: ${{ github.event.inputs.model_version }}
+      run: |
+        echo "Getting model from MLflow Model Registry..."
+        
+        python -c "
+import mlflow
+from mlflow.tracking import MlflowClient
+import os
+
+mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
+client = MlflowClient()
+
+model_name = '${{ env.MODEL_NAME }}'
+target_env = os.getenv('TARGET_ENVIRONMENT', 'staging')
+model_version = os.getenv('MODEL_VERSION', '')
+
+try:
+    if model_version:
+        # Use specific version
+        mv = client.get_model_version(model_name, model_version)
+        print(f'Using specific model version: {mv.version}')
+    else:
+        # Get latest model in the target stage
+        stage = 'Production' if target_env == 'production' else 'Staging'
+        mvs = client.get_latest_versions(model_name, stages=[stage])
+        if not mvs:
+            print(f'No model found in {stage} stage')
+            exit(1)
+        mv = mvs[0]
+        print(f'Using latest model in {stage} stage: version {mv.version}')
+    
+    model_uri = f'models:/{model_name}/{mv.version}'
+    
+    # Validate model metadata
+    if mv.status != 'READY':
+        print(f'Model version {mv.version} is not ready: {mv.status}')
+        exit(1)
+    
+    print(f'Model URI: {model_uri}')
+    print(f'Model version: {mv.version}')
+    print(f'Model stage: {mv.current_stage}')
+    
+    # Set outputs for next job
+    print(f'::set-output name=model_version::{mv.version}')
+    print(f'::set-output name=model_uri::{model_uri}')
+    
+except Exception as e:
+    print(f'Error getting model: {e}')
+    exit(1)
+"
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to AWS
+    needs: validate-model
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials using OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-session-name: GitHubActions-Deploy
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image to ECR
+      env:
+        MODEL_URI: ${{ needs.validate-model.outputs.model_uri }}
+        MODEL_VERSION: ${{ needs.validate-model.outputs.model_version }}
+      run: |
+        echo "Building and pushing Docker image to Amazon ECR..."
+        ecr_repo=${{ secrets.ECR_REPOSITORY_URI }}
+        
+        # Build image with model information as build args
+        docker build -f docker/serve.Dockerfile \
+          --build-arg MODEL_URI="${MODEL_URI}" \
+          --build-arg MODEL_VERSION="${MODEL_VERSION}" \
+          --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --build-arg VCS_REF="${{ github.sha }}" \
+          -t $ecr_repo:v${{ needs.validate-model.outputs.model_version }} \
+          -t $ecr_repo:${{ github.sha }} \
+          -t $ecr_repo:latest .
+        
+        # Push all tags
+        docker push $ecr_repo:v${{ needs.validate-model.outputs.model_version }}
+        docker push $ecr_repo:${{ github.sha }}
+        docker push $ecr_repo:latest
+        
+        echo "Docker image pushed successfully with tags:"
+        echo "- v${{ needs.validate-model.outputs.model_version }}"
+        echo "- ${{ github.sha }}"
+        echo "- latest"
+
+    - name: Update ECS service with new image
+      env:
+        MODEL_VERSION: ${{ needs.validate-model.outputs.model_version }}
+      run: |
+        echo "Updating ECS service with new Docker image..."
+        cluster_name=${{ secrets.ECS_CLUSTER_NAME }}
+        service_name=${{ secrets.ECS_SERVICE_NAME }}
+        ecr_repo=${{ secrets.ECR_REPOSITORY_URI }}
+        
+        # Get current task definition
+        current_task_def=$(aws ecs describe-services \
+          --cluster $cluster_name \
+          --services $service_name \
+          --query 'services[0].taskDefinition' \
+          --output text)
+        
+        echo "Current task definition: $current_task_def"
+        
+        # Update the task definition with new image
+        new_task_def=$(aws ecs describe-task-definition \
+          --task-definition $current_task_def \
+          --query 'taskDefinition' \
+          --output json | \
+          jq --arg IMAGE "$ecr_repo:v$MODEL_VERSION" \
+          '.containerDefinitions[0].image = $IMAGE' | \
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
+        
+        # Register new task definition
+        new_task_def_arn=$(echo $new_task_def | \
+          aws ecs register-task-definition \
+          --cli-input-json file:///dev/stdin \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+        
+        echo "New task definition ARN: $new_task_def_arn"
+        
+        # Update service with new task definition
+        aws ecs update-service \
+          --cluster $cluster_name \
+          --service $service_name \
+          --task-definition $new_task_def_arn
+        
+        echo "ECS service update initiated"
+    
+    - name: Wait for deployment to complete
+      run: |
+        echo "Waiting for ECS deployment to complete..."
+        cluster_name=${{ secrets.ECS_CLUSTER_NAME }}
+        service_name=${{ secrets.ECS_SERVICE_NAME }}
+        
+        aws ecs wait services-stable \
+          --cluster $cluster_name \
+          --services $service_name
+        
+        echo "✅ Deployment completed successfully"
+    
+    - name: Verify deployment health
+      run: |
+        echo "Verifying deployment health..."
+        
+        # Get service endpoint (this would be your ALB DNS or similar)
+        # For now, we'll just verify the service is running
+        cluster_name=${{ secrets.ECS_CLUSTER_NAME }}
+        service_name=${{ secrets.ECS_SERVICE_NAME }}
+        
+        running_count=$(aws ecs describe-services \
+          --cluster $cluster_name \
+          --services $service_name \
+          --query 'services[0].runningCount' \
+          --output text)
+        
+        desired_count=$(aws ecs describe-services \
+          --cluster $cluster_name \
+          --services $service_name \
+          --query 'services[0].desiredCount' \
+          --output text)
+        
+        if [ "$running_count" -eq "$desired_count" ]; then
+          echo "✅ Health check passed: $running_count/$desired_count tasks running"
+        else
+          echo "❌ Health check failed: $running_count/$desired_count tasks running"
+          exit 1
+        fi
+
+  deploy-terraform:
+    runs-on: ubuntu-latest
+    name: Deploy Infrastructure using Terraform
+    needs: deploy
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.0.3
+
+    - name: Initialize Terraform
+      run: terraform init
+      working-directory: infra
+
+    - name: Validate Terraform
+      run: terraform validate
+      working-directory: infra
+
+    - name: Plan Terraform
+      run: terraform plan -out=plan.out
+      working-directory: infra
+
+    - name: Apply Terraform
+      run: terraform apply -auto-approve plan.out
+      working-directory: infra

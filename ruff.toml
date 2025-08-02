@@ -1,0 +1,99 @@
+# Ruff configuration file
+target-version = "py310"
+line-length = 88
+indent-width = 4
+
+[lint]
+# Enable specific rule sets
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I",   # isort
+    "N",   # pep8-naming
+    "D",   # pydocstyle
+    "S",   # flake8-bandit
+    "C4",  # flake8-comprehensions
+    "ICN", # flake8-import-conventions
+    "PIE", # flake8-pie
+    "T20", # flake8-print
+    "RET", # flake8-return
+    "TCH", # flake8-type-checking
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+]
+
+# Ignore specific rules
+ignore = [
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D203", # 1 blank line required before class docstring
+    "D212", # Multi-line docstring summary should start at the first line
+    "D213", # Multi-line docstring summary should start at the second line
+    "S101", # Use of assert detected (pytest uses assertions)
+    "T201", # print found (logging is better, but sometimes needed)
+    "B008", # Do not perform function call in argument defaults
+]
+
+# Files and directories to exclude
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "htmlcov",
+]
+
+# Allow imports relative to these directories
+
+[lint.per-file-ignores]
+# Ignore specific rules for test files
+"tests/**/*.py" = [
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "S106", # Possible hardcoded password (test fixtures)
+    "ARG001", # Unused function argument (fixtures)
+    "ARG002", # Unused method argument (fixtures)
+]
+
+# Allow specific imports in __init__.py files
+"__init__.py" = ["F401"]
+
+[lint.mccabe]
+# Flag errors for function complexity above 10
+max-complexity = 10
+
+[lint.pydocstyle]
+convention = "google"
+
+[format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Use spaces around operators
+indent-style = "space"
+
+# Format docstrings
+docstring-code-format = true

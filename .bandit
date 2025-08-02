@@ -1,0 +1,53 @@
+[bandit]
+# Bandit configuration file for security scanning
+
+# Directories to exclude from scanning
+exclude_dirs = [
+    "venv",
+    ".venv", 
+    "htmlcov",
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "build",
+    "dist",
+    "node_modules"
+]
+
+# Tests to skip
+skips = [
+    "B101",  # assert_used - pytest uses assertions
+    "B601",  # paramiko_calls - may be needed for deployment
+    "B602",  # subprocess_popen_with_shell_equals_true - may be needed
+    "B603",  # subprocess_without_shell_equals_true - may be needed for deployment
+    "B607",  # start_process_with_partial_path - may be needed
+]
+
+# Directories to include in scanning
+include = [
+    "src",
+    "tests"  # Include tests to catch security issues in test fixtures
+]
+
+# Confidence levels (LOW, MEDIUM, HIGH)
+confidence = "MEDIUM"
+
+# Severity levels (LOW, MEDIUM, HIGH)  
+severity = "LOW"
+
+# Output format (csv, json, txt, xml, yaml)
+format = "txt"
+
+# Show only issues of a given confidence level or higher
+level = "LOW"
+
+# Report output file (optional)
+# output = "bandit_report.txt"
+
+# Additional options
+recursive = true
+aggregate = "file"
+number = 3
+context_lines = 3
