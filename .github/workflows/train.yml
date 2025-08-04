@@ -131,84 +131,24 @@ jobs:
     
     - name: Verify MLflow artifacts
       env:
-        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI || 'sqlite:///mlflow.db' }}
+        MLFLOW_EXPERIMENT_NAME: ${{ github.event.inputs.experiment_name || 'code_model_training' }}
       run: |
         echo "Verifying MLflow artifacts..."
-        
-        # List recent experiments and runs
-        python -c "
-import mlflow
-mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
-experiment = mlflow.get_experiment_by_name('${{ github.event.inputs.experiment_name || 'code_model_training' }}')
-if experiment:
-    runs = mlflow.search_runs(experiment.experiment_id, max_results=1, order_by=['start_time DESC'])
-    if not runs.empty:
-        print(f'Latest run ID: {runs.iloc[0].run_id}')
-        print(f'Latest run status: {runs.iloc[0].status}')
-        print(f'Latest run metrics: {runs.iloc[0].to_dict()}')
-        print('Training artifacts verified successfully')
-    else:
-        print('No runs found in experiment')
-        exit(1)
-else:
-    print('Experiment not found')
-    exit(1)
-"
+        python scripts/verify_mlflow_artifacts.py
     
     - name: Register model in MLflow Model Registry
       env:
-        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI || 'sqlite:///mlflow.db' }}
         MODEL_NAME: ${{ github.event.inputs.model_name || 'code_model_fine_tuning_model' }}
+        MLFLOW_EXPERIMENT_NAME: ${{ github.event.inputs.experiment_name || 'code_model_training' }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_EVENT_HEAD_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
       run: |
         echo "Registering model in MLflow Model Registry..."
-        
-        python -c "
-import mlflow
-from mlflow.tracking import MlflowClient
-
-mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
-client = MlflowClient()
-
-# Get the latest run from the experiment
-experiment = mlflow.get_experiment_by_name('${{ github.event.inputs.experiment_name || 'code_model_training' }}')
-if experiment:
-    runs = mlflow.search_runs(experiment.experiment_id, max_results=1, order_by=['start_time DESC'])
-    if not runs.empty:
-        run_id = runs.iloc[0].run_id
-        model_uri = f'runs:/{run_id}/model'
-        
-        # Register the model
-        try:
-            model_version = mlflow.register_model(
-                model_uri=model_uri,
-                name='${{ env.MODEL_NAME }}',
-                tags={
-                    'commit_sha': '${{ github.sha }}',
-                    'branch': '${{ github.ref_name }}',
-                    'workflow_run_id': '${{ github.run_id }}',
-                    'training_date': '${{ github.event.head_commit.timestamp }}'
-                }
-            )
-            print(f'Model registered successfully: {model_version.name} version {model_version.version}')
-            
-            # Tag this version as 'staging' by default
-            client.transition_model_version_stage(
-                name='${{ env.MODEL_NAME }}',
-                version=model_version.version,
-                stage='Staging'
-            )
-            print(f'Model version {model_version.version} transitioned to Staging')
-            
-        except Exception as e:
-            print(f'Error registering model: {e}')
-            exit(1)
-    else:
-        print('No runs found to register')
-        exit(1)
-else:
-    print('Experiment not found')
-    exit(1)
-"
+        python scripts/register_mlflow_model.py
     
     - name: Upload training artifacts
       uses: actions/upload-artifact@v3
