@@ -57,12 +57,13 @@ jobs:
     - name: Get model from MLflow Model Registry
       id: get-model
       env:
-        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI || 'sqlite:///mlflow.db' }}
         TARGET_ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
         MODEL_VERSION: ${{ github.event.inputs.model_version }}
         MODEL_NAME: ${{ env.MODEL_NAME }}
       run: |
         echo "Getting model from MLflow Model Registry..."
+        echo "MLflow Tracking URI: $MLFLOW_TRACKING_URI"
         python scripts/get_mlflow_model.py
 
   deploy:

@@ -53,8 +53,16 @@ def main():
         print(f'Model stage: {mv.current_stage}')
         
         # Set outputs for next job (GitHub Actions format)
-        print(f'::set-output name=model_version::{mv.version}')
-        print(f'::set-output name=model_uri::{model_uri}')
+        # Using newer GITHUB_OUTPUT format
+        github_output = os.getenv('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write(f'model_version={mv.version}\n')
+                f.write(f'model_uri={model_uri}\n')
+        else:
+            # Fallback to legacy format for local testing
+            print(f'::set-output name=model_version::{mv.version}')
+            print(f'::set-output name=model_uri::{model_uri}')
         
     except Exception as e:
         print(f'Error getting model: {e}')
